@@ -1,4 +1,8 @@
-
+// Telegram webhook
+app.post('/webhook', (req, res) => {
+  console.log('Telegram update:', req.body);
+  res.sendStatus(200); // Respond fast to Telegram
+});
 // Afri Studio Backend - with health check and webhook
 require('dotenv').config();
 const express = require('express');
