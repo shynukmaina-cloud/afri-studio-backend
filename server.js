@@ -1,140 +1,153 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
-const dotenv = require("dotenv");
-const FormData = require("form-data");
+// ✅ Afri Studio Backend — Fast Version
+import express from "express";
+import dotenv from "dotenv";
+import axios from "axios";
+import fs from "fs";
+import Replicate from "replicate";
+import FormData from "form-data";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegStatic from "ffmpeg-static";
+import bodyParser from "body-parser";
 
 dotenv.config();
-
 const app = express();
 app.use(bodyParser.json());
 
-// ✅ TEST ROUTES
-app.get("/", (req, res) => res.send("✅ Afri Studio Backend — Kikuyu Voice Online"));
-app.get("/healthz", (req, res) => res.send("ok"));
+const replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN,
+});
 
-// 🧩 ENVIRONMENT VARIABLES
+// ✅ Telegram bot setup
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
-const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 
-// 🎙️ TEXT → VOICE (Kikuyu-accented male)
+// --- Helper: send Telegram message ---
+async function sendTelegram(chatId, text) {
+  try {
+    await axios.post(`${TELEGRAM_URL}/sendMessage`, {
+      chat_id: chatId,
+      text,
+    });
+  } catch (err) {
+    console.error("❌ Telegram send error:", err.message);
+  }
+}
+
+// --- Helper: generate voice using ElevenLabs ---
 async function generateVoice(text) {
   try {
-    const outputPath = path.join("/tmp", "voice.mp3");
-
-    // ElevenLabs “African English Male” voice (warm Kikuyu accent)
-    const voiceId = "TxGEqnHWrfWFTfGW9XjX"; // African Male English
-    const response = await axios({
-      method: "post",
-      url: `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      headers: {
-        "xi-api-key": ELEVENLABS_API_KEY,
-        "Content-Type": "application/json",
-      },
-      data: {
+    const url = "https://api.elevenlabs.io/v1/text-to-speech/exAVpJs5YKvo0D8j3Z5N";
+    const res = await axios.post(
+      url,
+      {
         text,
-        model_id: "eleven_monolingual_v1",
-        voice_settings: { stability: 0.35, similarity_boost: 0.85 },
+        voice_settings: { stability: 0.4, similarity_boost: 0.8 },
       },
-      responseType: "arraybuffer",
-    });
+      {
+        headers: {
+          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
+        },
+        responseType: "arraybuffer",
+      }
+    );
 
-    fs.writeFileSync(outputPath, response.data);
-    return outputPath;
+    const filePath = "voice.mp3";
+    fs.writeFileSync(filePath, res.data);
+    return filePath;
   } catch (err) {
-    console.error("🧠 Voice generation error:", err.message);
+    console.error("❌ Voice generation failed:", err.message);
     return null;
   }
 }
 
-// 🤖 TELEGRAM WEBHOOK
-app.post("/webhook", async (req, res) => {
-  console.log("📩 Telegram update:", req.body);
-  res.sendStatus(200);
-
+// --- Helper: generate video using Replicate (FAST MODEL) ---
+async function generateVideo(prompt) {
   try {
-    const message = req.body?.message?.text;
-    const chatId = req.body?.message?.chat?.id;
-    if (!message || !chatId) return;
-
-    await axios.post(`${TELEGRAM_URL}/sendMessage`, {
-      chat_id: chatId,
-      text: "🎬 Generating your Afri Studio animation... Please wait...",
-    });
-
-    // 🌍 Generate video using Replicate
-    const replicateResponse = await axios.post(
-      "https://api.replicate.com/v1/predictions",
+    console.log("🎬 Generating video for:", prompt);
+    const output = await replicate.run(
+      "stability-ai/zelos-v2:1e5b52f51a68...", // fast model
       {
-        version:
-          "c43b13a0f0c97b3b8e6adfcae88d593f07f83f594f8ec6b14f7cce14f2d92a64",
-        input: { prompt: message },
-      },
-      {
-        headers: {
-          Authorization: `Token ${REPLICATE_API_TOKEN}`,
-          "Content-Type": "application/json",
+        input: {
+          prompt,
+          duration: 5,
+          aspect_ratio: "9:16",
+          resolution: "720p",
         },
       }
     );
 
-    const predictionId = replicateResponse.data.id;
-    console.log("🧠 Replicate started:", predictionId);
-
-    // ⏳ Poll until video ready
-    let videoUrl = null;
-    while (!videoUrl) {
-      const check = await axios.get(
-        `https://api.replicate.com/v1/predictions/${predictionId}`,
-        { headers: { Authorization: `Token ${REPLICATE_API_TOKEN}` } }
-      );
-      const status = check.data.status;
-
-      if (status === "succeeded") {
-        videoUrl = check.data.output[0];
-        console.log("✅ Video ready:", videoUrl);
-      } else if (status === "failed") {
-        await axios.post(`${TELEGRAM_URL}/sendMessage`, {
-          chat_id: chatId,
-          text: "😔 Sorry, generation failed. Try again later.",
-        });
-        return;
-      } else {
-        console.log(`⏳ Still generating... (${status})`);
-        await new Promise((r) => setTimeout(r, 6000));
-      }
-    }
-
-    // 🎧 Generate voice
-    const voicePath = await generateVoice("Your Afri Studio animation is ready!");
-    if (voicePath) {
-      const voiceFile = fs.createReadStream(voicePath);
-      const formData = new FormData();
-      formData.append("chat_id", chatId);
-      formData.append("voice", voiceFile);
-
-      await axios.post(`${TELEGRAM_URL}/sendVoice`, formData, {
-        headers: formData.getHeaders(),
-      });
-    }
-
-    // 🎥 Send video
-    await axios.post(`${TELEGRAM_URL}/sendVideo`, {
-      chat_id: chatId,
-      video: videoUrl,
-      caption: "🎥 Here's your Afri Studio animation!",
-    });
-
-    console.log("🚀 Sent video + Kikuyu voice");
+    const videoUrl = output[0];
+    const response = await axios.get(videoUrl, { responseType: "arraybuffer" });
+    const filePath = "output.mp4";
+    fs.writeFileSync(filePath, Buffer.from(response.data));
+    return filePath;
   } catch (err) {
-    console.error("❌ Webhook error:", err.message);
+    console.error("❌ Video generation failed:", err.message);
+    return null;
   }
+}
+
+// --- Combine video and voice (optional) ---
+async function combineVideoAndVoice(videoPath, voicePath) {
+  return new Promise((resolve, reject) => {
+    const output = "final_output.mp4";
+    ffmpeg.setFfmpegPath(ffmpegStatic);
+    ffmpeg(videoPath)
+      .addInput(voicePath)
+      .outputOptions("-shortest")
+      .on("end", () => resolve(output))
+      .on("error", (err) => reject(err))
+      .save(output);
+  });
+}
+
+// --- Telegram webhook route ---
+app.post("/webhook", async (req, res) => {
+  res.sendStatus(200);
+  const message = req.body.message;
+  if (!message || !message.text) return;
+
+  const chatId = message.chat.id;
+  const text = message.text.trim();
+
+  console.log("📩 Received:", text);
+
+  await sendTelegram(chatId, "🎬 Generating your Afri Studio animation... Please wait...");
+
+  const videoPath = await generateVideo(text);
+  if (!videoPath) {
+    return await sendTelegram(chatId, "❌ Video generation failed. Try again later.");
+  }
+
+  const voiceText = `Creating animation: ${text}`;
+  const voicePath = await generateVoice(voiceText);
+
+  let finalVideo = videoPath;
+  if (voicePath) {
+    try {
+      finalVideo = await combineVideoAndVoice(videoPath, voicePath);
+    } catch (err) {
+      console.error("❌ Combine error:", err.message);
+    }
+  }
+
+  // Send video back to Telegram
+  const formData = new FormData();
+  formData.append("chat_id", chatId);
+  formData.append("video", fs.createReadStream(finalVideo));
+
+  await axios.post(`${TELEGRAM_URL}/sendVideo`, formData, {
+    headers: formData.getHeaders(),
+  });
+
+  console.log("✅ Animation sent to user!");
 });
 
-// ⚙️ PORT
+// --- Health route for Render ---
+app.get("/healthz", (req, res) => res.send("ok"));
+app.get("/", (req, res) => res.send("Afri Studio Backend running ✅"));
+
+// --- Start server ---
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`✅ Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Running on port ${PORT}`));
