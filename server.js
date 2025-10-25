@@ -1,7 +1,7 @@
-import express from "express";
-import bodyParser from "body-parser";
-import axios from "axios";
-import dotenv from "dotenv";
+const express = require("express");
+const bodyParser = require("body-parser");
+const axios = require("axios");
+const dotenv = require("dotenv");
 
 dotenv.config();
 
@@ -46,10 +46,8 @@ app.post("/webhook", async (req, res) => {
       "https://api.replicate.com/v1/predictions",
       {
         version:
-          "c43b13a0f0c97b3b8e6adfcae88d593f07f83f594f8ec6b14f7cce14f2d92a64", // example animation/text2video model
-        input: {
-          prompt: message,
-        },
+          "c43b13a0f0c97b3b8e6adfcae88d593f07f83f594f8ec6b14f7cce14f2d92a64",
+        input: { prompt: message },
       },
       {
         headers: {
@@ -68,9 +66,7 @@ app.post("/webhook", async (req, res) => {
       const check = await axios.get(
         `https://api.replicate.com/v1/predictions/${predictionId}`,
         {
-          headers: {
-            Authorization: `Token ${REPLICATE_API_TOKEN}`,
-          },
+          headers: { Authorization: `Token ${REPLICATE_API_TOKEN}` },
         }
       );
       if (check.data.status === "succeeded") {
@@ -83,7 +79,7 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // Step 4: Send the video back to Telegram
+    // Step 4: Send video to Telegram
     await axios.post(`${TELEGRAM_URL}/sendVideo`, {
       chat_id: chatId,
       video: videoUrl,
