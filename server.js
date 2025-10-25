@@ -1,47 +1,72 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 const dotenv = require("dotenv");
+const FormData = require("form-data");
 
 dotenv.config();
 
 const app = express();
 app.use(bodyParser.json());
 
-// ========== TEST ROUTES ==========
-app.get("/", (req, res) => {
-  res.send("✅ Afri Studio backend is running!");
-});
+// ✅ TEST ROUTES
+app.get("/", (req, res) => res.send("✅ Afri Studio Backend — Kikuyu Voice Online"));
+app.get("/healthz", (req, res) => res.send("ok"));
 
-app.get("/healthz", (req, res) => {
-  res.send("ok");
-});
-
-// ========== TELEGRAM SETUP ==========
+// 🧩 ENVIRONMENT VARIABLES
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
-
-// ========== REPLICATE SETUP ==========
 const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 
-// ========== WEBHOOK ==========
+// 🎙️ TEXT → VOICE (Kikuyu-accented male)
+async function generateVoice(text) {
+  try {
+    const outputPath = path.join("/tmp", "voice.mp3");
+
+    // ElevenLabs “African English Male” voice (warm Kikuyu accent)
+    const voiceId = "TxGEqnHWrfWFTfGW9XjX"; // African Male English
+    const response = await axios({
+      method: "post",
+      url: `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      headers: {
+        "xi-api-key": ELEVENLABS_API_KEY,
+        "Content-Type": "application/json",
+      },
+      data: {
+        text,
+        model_id: "eleven_monolingual_v1",
+        voice_settings: { stability: 0.35, similarity_boost: 0.85 },
+      },
+      responseType: "arraybuffer",
+    });
+
+    fs.writeFileSync(outputPath, response.data);
+    return outputPath;
+  } catch (err) {
+    console.error("🧠 Voice generation error:", err.message);
+    return null;
+  }
+}
+
+// 🤖 TELEGRAM WEBHOOK
 app.post("/webhook", async (req, res) => {
-  console.log("📩 Telegram update received:", req.body);
+  console.log("📩 Telegram update:", req.body);
   res.sendStatus(200);
 
   try {
     const message = req.body?.message?.text;
     const chatId = req.body?.message?.chat?.id;
-
     if (!message || !chatId) return;
 
-    // Step 1: Acknowledge message
     await axios.post(`${TELEGRAM_URL}/sendMessage`, {
       chat_id: chatId,
-      text: "🎬 Generating your Afri Studio animation... Please wait.",
+      text: "🎬 Generating your Afri Studio animation... Please wait...",
     });
 
-    // Step 2: Use Replicate model to generate video from text
+    // 🌍 Generate video using Replicate
     const replicateResponse = await axios.post(
       "https://api.replicate.com/v1/predictions",
       {
@@ -57,41 +82,59 @@ app.post("/webhook", async (req, res) => {
       }
     );
 
-    const prediction = replicateResponse.data;
-    const predictionId = prediction.id;
+    const predictionId = replicateResponse.data.id;
+    console.log("🧠 Replicate started:", predictionId);
 
-    // Step 3: Wait for Replicate to finish
+    // ⏳ Poll until video ready
     let videoUrl = null;
     while (!videoUrl) {
       const check = await axios.get(
         `https://api.replicate.com/v1/predictions/${predictionId}`,
-        {
-          headers: { Authorization: `Token ${REPLICATE_API_TOKEN}` },
-        }
+        { headers: { Authorization: `Token ${REPLICATE_API_TOKEN}` } }
       );
-      if (check.data.status === "succeeded") {
+      const status = check.data.status;
+
+      if (status === "succeeded") {
         videoUrl = check.data.output[0];
-      } else if (check.data.status === "failed") {
-        throw new Error("Generation failed");
+        console.log("✅ Video ready:", videoUrl);
+      } else if (status === "failed") {
+        await axios.post(`${TELEGRAM_URL}/sendMessage`, {
+          chat_id: chatId,
+          text: "😔 Sorry, generation failed. Try again later.",
+        });
+        return;
       } else {
-        console.log("⏳ Still generating...");
-        await new Promise((r) => setTimeout(r, 5000));
+        console.log(`⏳ Still generating... (${status})`);
+        await new Promise((r) => setTimeout(r, 6000));
       }
     }
 
-    // Step 4: Send video to Telegram
+    // 🎧 Generate voice
+    const voicePath = await generateVoice("Your Afri Studio animation is ready!");
+    if (voicePath) {
+      const voiceFile = fs.createReadStream(voicePath);
+      const formData = new FormData();
+      formData.append("chat_id", chatId);
+      formData.append("voice", voiceFile);
+
+      await axios.post(`${TELEGRAM_URL}/sendVoice`, formData, {
+        headers: formData.getHeaders(),
+      });
+    }
+
+    // 🎥 Send video
     await axios.post(`${TELEGRAM_URL}/sendVideo`, {
       chat_id: chatId,
       video: videoUrl,
       caption: "🎥 Here's your Afri Studio animation!",
     });
+
+    console.log("🚀 Sent video + Kikuyu voice");
   } catch (err) {
-    console.error("❌ Error in webhook:", err.message);
+    console.error("❌ Webhook error:", err.message);
   }
 });
 
-// ========== PORT SETUP ==========
+// ⚙️ PORT
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ Server running on ${PORT}`));
