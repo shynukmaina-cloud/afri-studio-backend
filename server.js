@@ -5,6 +5,19 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
+// ✅ Root route
+app.get("/", (req, res) => {
+  res.send("🌍 Afri Studio Backend is live! Use /healthz or /webhook for bots.");
+});
+
+// ✅ Health check
+app.get("/healthz", (req, res) => res.send("ok"));require("dotenv").config();
+const express = require("express");
+const axios = require("axios");
+
+const app = express();
+app.use(express.json());
+
 // ✅ Health check
 app.get("/healthz", (req, res) => res.send("ok"));
 
