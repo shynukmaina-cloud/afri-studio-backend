@@ -11,5 +11,10 @@
     "body-parser": "^1.20.2",
     "express": "^4.18.2",
     "replicate": "^0.29.4"
+    "dependencies": {
+  "express": "^4.18.2",
+  "axios": "^1.6.7",
+  "dotenv": "^16.3.1"
+}
   }
 }
