@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import Replicate from "replicate";
+import 'dotenv/config';
 
 const app = express();
 app.use(express.json());
@@ -8,6 +9,8 @@ app.use(express.json());
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 });
+const TOKEN = process.env.BOT_TOKEN;
+const TELEGRAM_API = `https://api.telegram.org/bot${TOKEN}`;
 
 app.get("/", (req, res) => {
   res.send("✅ Afri Studio Bot Backend is running");
