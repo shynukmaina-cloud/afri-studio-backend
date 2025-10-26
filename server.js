@@ -40,7 +40,7 @@ app.post("/webhook", async (req, res) => {
     await sendMessage(chatId, "🎬 Generating your 3D AI animation... please wait about a minute.");
 
     // Call Pika Labs model on Replicate
-    const output = await replicate.run("pikalabs/pika-1.5", {
+    const output = await replicate.run("pika-labs/pika-1", {
       input: {
         prompt: text,
         guidance_scale: 7,
