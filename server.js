@@ -1,71 +1,66 @@
 import express from "express";
-import bodyParser from "body-parser";
 import axios from "axios";
+import bodyParser from "body-parser";
+import Replicate from "replicate";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// 🧩 Replace with your actual Telegram bot token
-const BOT_TOKEN = "YOUR_BOT_TOKEN_HERE";
-const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
-
-// Middleware
 app.use(bodyParser.json());
 
-// 🩵 Default route — just for testing
+const TELEGRAM_TOKEN = "8253362272:AAHMyQEanzAnCsRbK_7l9c46AaqL4MokXOA";
+const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
+const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+
+// Default route for Render check
 app.get("/", (req, res) => {
-  res.send("✅ Afri Studio backend is live!");
+  res.send("✅ Afri Studio Bot is running!");
 });
 
-// 🩵 Health check route
-app.get("/healthz", (req, res) => {
-  res.status(200).send("ok");
-});
-
-// 🩵 Telegram webhook route
+// Telegram webhook route
 app.post("/webhook", async (req, res) => {
+  console.log("📩 Telegram update received:", req.body);
+  res.sendStatus(200);
+
   try {
-    const message = req.body.message;
-    if (!message || !message.text) {
-      return res.sendStatus(200);
+    if (!req.body.message) return;
+    const chatId = req.body.message.chat.id;
+    const text = req.body.message.text;
+
+    if (text === "/start") {
+      await sendMessage(chatId, "👋 Welcome to Afri Studio Bot!\nSend me a short animation idea, and I’ll turn it into a video 🎬");
+      return;
     }
 
-    const chatId = message.chat.id;
-    const userMessage = message.text.trim();
+    await sendMessage(chatId, "🎬 Generating your Afri Studio animation... Please wait...");
 
-    console.log("📩 Received:", userMessage);
+    // Generate video with Replicate (you can swap model later)
+    const output = await replicate.run(
+      "stability-ai/stable-diffusion:db21e45b", // example image generator
+      { input: { prompt: text } }
+    );
 
-    // Simple responses
-    if (userMessage.toLowerCase().includes("hi")) {
-      await sendMessage(chatId, "Hello 👋! Welcome to Afri Studio!");
-    } else if (userMessage.toLowerCase().includes("generate")) {
-      await sendMessage(chatId, "🎬 Generating your Afri Studio animation... Please wait...");
-      // Simulate video generation
-      setTimeout(async () => {
-        await sendMessage(chatId, "✅ Done! (Example: Animation generated successfully.)");
-      }, 5000);
+    if (Array.isArray(output) && output[0]) {
+      await sendVideo(chatId, output[0]);
     } else {
-      await sendMessage(chatId, "🤖 Send 'generate' to create your Afri Studio animation.");
+      await sendMessage(chatId, "❌ Sorry, something went wrong while generating your video.");
     }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("❌ Error in webhook:", err.message);
-    res.sendStatus(500);
+  } catch (error) {
+    console.error("❌ Error handling message:", error);
   }
 });
 
-// Function to send Telegram messages
 async function sendMessage(chatId, text) {
-  try {
-    await axios.post(`${TELEGRAM_API}/sendMessage`, {
-      chat_id: chatId,
-      text,
-    });
-  } catch (err) {
-    console.error("Telegram sendMessage error:", err.response?.data || err.message);
-  }
+  await axios.post(`${TELEGRAM_API}/sendMessage`, {
+    chat_id: chatId,
+    text,
+  });
 }
 
-// Start server
-app.listen(PORT, () => console.log(`🚀 Afri Studio backend running on port ${PORT}`));
+async function sendVideo(chatId, videoUrl) {
+  await axios.post(`${TELEGRAM_API}/sendVideo`, {
+    chat_id: chatId,
+    video: videoUrl,
+  });
+}
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
