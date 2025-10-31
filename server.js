@@ -26,7 +26,16 @@ app.post("/webhook", async (req, res) => {
 
     const chatId = message.chat.id;
     const text = message.text.toLowerCase();
+const chatId = req.body.message.chat.id;
+const messageText = req.body.message.text;
 
+await axios.post(
+  `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+  {
+    chat_id: chatId,
+    text: `Hey ${req.body.message.from.first_name}! 👋 You said: "${messageText}"`
+  }
+);
     if (text.includes("start") || text.includes("/start")) {
       await sendMessage(chatId, "👋 Welcome to Afri Studio — Smart African Animation!");
       await sendMessage(chatId, "Send me your animation idea to get started 🎬");
