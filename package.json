@@ -1,18 +1,15 @@
 {
   "name": "afri-studio-backend",
   "version": "1.0.0",
-  "description": "Backend server for Afri Studio",
+  "description": "Afri Studio AI 3D Animation Telegram Bot Backend",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
-  },
-  "engines": {
-    "node": ">=18.x"
-  },
-  "license": "MIT"
+    "axios": "^1.7.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  }
 }
