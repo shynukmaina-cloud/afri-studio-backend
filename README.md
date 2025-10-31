@@ -1,13 +1,15 @@
-# Afri Studio — Backend
+# Afri Studio Backend
 
-### Run locally
-1. Copy .env.example to .env and fill keys
-2. npm install
-3. node server.js
-4. POST to /generate with JSON {"text": "Your prompt"}
+AI-powered 3D animation Telegram bot backend.
 
-### Deploy to Render
-1. Push files to GitHub
-2. On Render, New Web Service → Connect repo
-3. Use Dockerfile and set env vars
-4. After deploy, call https://<your-app>.onrender.com/generate
+### Commands
+
+- `/start` — Greet and start animation request
+- Any message — triggers 3D animation generation simulation
+
+### Deploy Steps (Render)
+1. Connect GitHub repo to Render.
+2. Add environment variables:
+   - `BOT_TOKEN`
+   - `BASE_URL`
+3. Deploy and set webhook:
