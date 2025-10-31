@@ -9,7 +9,10 @@ app.use(express.json());
 
 const TELEGRAM_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
-
+app.post("/webhook", async (req, res) => {
+  console.log("Webhook received:", req.body);
+  res.sendStatus(200);
+});
 // === Route for testing ===
 app.get("/", (req, res) => {
   res.send("✅ Afri Studio Backend is Live — Webhook Connected!");
