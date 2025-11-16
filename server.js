@@ -89,6 +89,7 @@ async function generateZestVideo(prompt) {
 app.get("/", (req, res) => res.send("Afri Studio Zest Bot Running ✔"));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on port ${PORT}`)
-);
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
