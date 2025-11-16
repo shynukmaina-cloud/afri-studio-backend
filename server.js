@@ -1,6 +1,5 @@
 // ==========================================
-// 🌍 AFRI STUDIO — AI VIDEO GENERATOR BOT
-// Using OpenAI API (Mixed Style)
+// 🌍 AFRI STUDIO — ZEST VIDEO BOT (REPLICATE)
 // ==========================================
 
 import express from "express";
@@ -9,12 +8,11 @@ import TelegramBot from "node-telegram-bot-api";
 import axios from "axios";
 
 dotenv.config();
-
 const app = express();
 app.use(express.json());
 
 // ================================
-// 🔹 TELEGRAM BOT SETUP
+// 🔹 TELEGRAM BOT
 // ================================
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
@@ -24,62 +22,73 @@ bot.on("message", async (msg) => {
 
   if (!prompt) return;
 
-  console.log(`📩 User: ${prompt}`);
+  console.log(`📩 Prompt: ${prompt}`);
 
-  await bot.sendMessage(chatId, "🎥 Creating your Afri Studio mixed-style video…");
+  await bot.sendMessage(chatId, "🎬 Zest is making your AI video… please wait 1–2 minutes.");
 
   try {
-    const videoUrl = await createVideo(prompt);
+    const videoUrl = await generateZestVideo(prompt);
 
     if (videoUrl) {
-      await bot.sendMessage(chatId, "✅ Your video is ready!");
+      await bot.sendMessage(chatId, "✅ Your Afri Studio video is ready!");
       await bot.sendVideo(chatId, videoUrl);
     } else {
-      await bot.sendMessage(chatId, "❌ Video generation failed. Try another prompt.");
+      await bot.sendMessage(chatId, "❌ Zest failed. Try again with a different prompt.");
     }
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err);
     await bot.sendMessage(chatId, "❌ Error generating your video.");
   }
 });
 
-// ===================================
-// 🎬 OPENAI VIDEO GENERATION FUNCTION
-// ===================================
-async function createVideo(prompt) {
-  const url = "https://api.openai.com/v1/videos/generations";
+// ================================
+// 🎥 ZEST VIDEO GENERATION (REPLICATE)
+// ================================
+async function generateZestVideo(prompt) {
+  const url = "https://api.replicate.com/v1/predictions";
 
   const headers = {
-    "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+    "Authorization": `Token ${process.env.REPLICATE_API_KEY}`,
     "Content-Type": "application/json"
   };
 
   const body = {
-    model: "gpt-image-1",
-    prompt: `Create a smooth short video in mixed-style format. ${prompt}`,
-    size: "1024x576",
-    duration: 6
+    version: "zest-ai/zest-1",  // ZEST VIDEO MODEL
+    input: {
+      prompt: prompt,
+      resolution: "540p",
+      duration: 5
+    }
   };
 
-  try {
-    const response = await axios.post(url, body, { headers });
+  // Create prediction
+  const create = await axios.post(url, body, { headers });
+  const predictionId = create.data.id;
 
-    // Some responses contain direct URL
-    if (response.data?.data?.[0]?.url) {
-      return response.data.data[0].url;
+  // Poll until video is ready
+  let status = create.data.status;
+  let outputUrl = null;
+
+  while (status !== "succeeded" && status !== "failed") {
+    await new Promise((res) => setTimeout(res, 5000));
+
+    const check = await axios.get(`${url}/${predictionId}`, { headers });
+    status = check.data.status;
+
+    if (status === "succeeded") {
+      outputUrl = check.data.output.video;
     }
-
-    return null;
-  } catch (err) {
-    console.error("❌ OpenAI Error:", err.response?.data || err.message);
-    return null;
   }
+
+  return outputUrl;
 }
 
 // ================================
-// 🧠 HEALTH CHECK SERVER
+// SERVER
 // ================================
-app.get("/", (req, res) => res.send("Afri Studio Video Bot Running OK ✔"));
+app.get("/", (req, res) => res.send("Afri Studio Zest Bot Running ✔"));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);
